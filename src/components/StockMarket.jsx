@@ -1,73 +1,69 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Fragment } from "react";
 import axios from 'axios';
-import { Autocomplete, Button, FormControl, InputLabel, MenuItem, Select, TextField } from "@mui/material";
-import useInterval from "react-useinterval";
-
+import { Button, FormControl, InputLabel, Select, MenuItem, TextField, Tooltip, TableContainer, Paper, Table, TableRow, TableBody, TableCell, Chip, Stack, Divider } from "@mui/material";
+import { DataGrid } from '@mui/x-data-grid';
+import "./tableStyle.css";
+import Api from './StockMarketApi';
+import { StockContext } from "./StockContext";
+import ReactApexChart from "react-apexcharts";
+import Moment from 'moment';
 export const StockMarket = (props) => {
+    const stockContext = React.useContext(StockContext);
     const [stockData, setStockData] = useState();
-    const [selectedSymbol, setSelectedSymbol] = useState();
     const [priceForTrade, setPriceForTrade] = useState();
     const [quantityOfShares, setQuantityOfShares] = useState();
     const [tradeIndicator, setTradeIndicator] = useState();
-    const [dividendYield, setDividendYield] = useState();
-    const [pERatio, setPERatio] = useState();
-    const [vWSP, setVWSP] = useState();
-    const [latestPrice, setLatestPrice] = useState();
-    const [gBCEAllShareIndex, setGBCEAllShareIndex] = useState();
+    const [trades, setTrades] = useState();
+    const [data, setData] = useState();
 
-    useEffect(() => {
-        axios.get('api/stockmarket').then(r => {
+    const callBackGetTrades = useCallback(() => {
+        Api.getTrades().then(r => {
             if (!r.data) return;
-
-            setStockData(r.data);
+            console.log(r.data);
+            setTrades(r.data);
         }).catch(
             function (error) {
-                console.log('Endpoint error: api/stockmarket');
+                console.log('Endpoint error: api/getTrades');
                 console.log(error);
                 return Promise.reject(error)
             }
         );
-    }, [setStockData]);
+    }, [setTrades]);
+
+    useEffect(() => {
+        callBackGetTrades();
+    }, [callBackGetTrades]);
 
 
-    const handleOnChangedSymbol = useCallback((value) => {
-
-        axios.get('api/stockmarket/getStockCalculations', {
-            params: {
-                stockSymbol: value.stockSymbol
-            }
-        }).then(r => {
+    const handleOnChangedSymbol = useCallback((symbol) => {
+        Api.getStockCalculations(symbol).then(r => {
             if (!r.data) return;
             console.log(r.data);
-            setDividendYield(r.data.dividendYield);
-            setPERatio(r.data.peRatio);
-            setVWSP(r.data.volumeWeightedStockPrice);
-            setLatestPrice(r.data.latestPrice);
-            setGBCEAllShareIndex(r.data.gbceAllShareIndex);
+
+            setStockData(r.data);
         }).catch(
             function (error) {
-                setDividendYield(undefined);
-                setPERatio(undefined);
-                setVWSP(undefined);
-                setLatestPrice(undefined);
-
                 console.log('Endpoint error: api/stockmarket/getStockCalculations');
                 console.log(error);
                 return Promise.reject(error)
             }
         );
 
-        setSelectedSymbol(value);
-    }, [setSelectedSymbol, setDividendYield, setPERatio, setVWSP, setLatestPrice, setGBCEAllShareIndex]);
+    }, [setStockData]);
     // useInterval(getStockMarketData, 5000);
+
+    useEffect(() => {
+        if (!stockContext) return;
+        handleOnChangedSymbol(stockContext);
+    }, [stockContext, handleOnChangedSymbol]);
 
     const handleSubmit = useCallback(
         (event) => {
             event?.preventDefault();
 
             var trade = {
-                stockSymbol: selectedSymbol?.stockSymbol,
+                stockSymbol: stockContext,
                 quantityOfShares: quantityOfShares,
                 price: priceForTrade,
                 tradeIndicator: tradeIndicator
@@ -80,7 +76,10 @@ export const StockMarket = (props) => {
                 setQuantityOfShares(undefined);
                 setTradeIndicator(0);
 
-                console.log(r.data);
+                setTrades(prevState => [...prevState, r.data]);
+
+                //I am trying to avoid polling in here
+                handleOnChangedSymbol(stockContext);
             }).catch(
                 function (error) {
                     console.log('Endpoint error: api/stockmarket/trade');
@@ -89,122 +88,242 @@ export const StockMarket = (props) => {
                 }
             )
         },
-        [selectedSymbol, quantityOfShares, priceForTrade, tradeIndicator, setPriceForTrade, setQuantityOfShares, setTradeIndicator],
+        [handleOnChangedSymbol, stockContext, quantityOfShares, priceForTrade, tradeIndicator, setPriceForTrade, setQuantityOfShares, setTradeIndicator],
     )
 
+    useEffect(() => {
+        if (!trades || !stockContext) return;
+        var myData = trades.filter(x => x.stockSymbol === stockContext).map(x => [x.timeStamp, x.price]);
+        console.log("mydata")
+        console.log(myData);
+        setData(myData);
+    }, [trades, stockContext]);
+
+    const columns = [
+        { field: 'stockSymbol', headerName: 'Symbol', width: 130 },
+        { field: 'price', headerName: 'Price', width: 130 },
+        { field: 'quantityOfShares', headerName: 'Quantity of shares', width: 130 },
+        { field: 'tradeIndicatorDesc', headerName: 'Trade indicator', width: 130 },
+        { field: 'timeStamp', type: 'dateTime', headerName: 'Timestamp', minWidth: 200 },
+    ];
+
+
+    const options = {
+        chart: {
+            type: "area",
+            stacked: false,
+            height: 350,
+            zoom: {
+                type: "x",
+                enabled: true,
+                autoScaleYaxis: true
+            },
+            toolbar: {
+                autoSelected: "zoom"
+            }
+        },
+        dataLabels: {
+            enabled: false
+        },
+        markers: {
+            size: 0,
+        },
+        title: {
+            // text: "Temperature",            
+            // align: "left"
+        },
+        fill: {
+            type: "gradient",
+            gradient: {
+                shadeIntensity: 1,
+                inverseColors: false,
+                opacityFrom: 0.5,
+                opacityTo: 0,
+                stops: [0, 90, 100]
+            },
+        },
+        yaxis: {
+            labels: {
+                formatter: function (val) {
+                    return (val).toFixed(2);
+                },
+            },
+            title: {
+                text: "Price"
+            },
+        },
+        xaxis: {
+            type: "datetime",
+            // datetimeFormatter: {
+            //     year: 'yyyy',
+            //     month: 'MMM \'yy',
+            //     day: 'dd MMM',
+            //     hour: 'HH:mm:ss',
+            //     minute: 'mm:ss',
+            //     second: 'ss'
+            // },
+            // labels: {
+            //     formatter: function (val) {
+            //         return Moment(val).format("YYYY-dd-MM hh:mm:ss")
+            //     },
+            // },
+        },
+        tooltip: {
+            shared: false,
+            y: {
+                formatter: function (val) {
+                    return (val).toFixed(2)
+                }
+            }
+        }
+    };
+
     return (<Fragment>
-        <Autocomplete
-            freeSolo
-            id="free-solo-2-demo"
-            disableClearable
-            getOptionLabel={(option) => option?.stockSymbol}
-            options={stockData ?? []}
-            onChange={(event, value) => handleOnChangedSymbol(value)}
-            renderInput={(params) => (
-                <TextField
-                    {...params}
-                    label="Search symbol"
-                    InputProps={{
-                        ...params.InputProps,
-                        type: 'search',
-                    }}
-                />
-            )}
-        />
-        <hr />
+        <div className="d-flex flex-row justify-content-between">
+            <div className="p-2 mr-auto">
+                {stockData &&
+                    <Stack direction="column" spacing={-3}>
+                        <Tooltip title="Stock symbol" arrow followCursor>
+                            <p style={{ fontSize: "1rem", fontWeight: "lighter" }}>{stockData?.stockSymbol} - Global Beverage Corporation Exchange</p>
+                        </Tooltip>
+                        <Tooltip title="Latest price" arrow followCursor>
 
-        <h3>Latest price: {latestPrice}</h3>
-        <div className="row">
-            <div className="col">
+                            <p style={{ fontSize: "36px", fontWeight: "bolder" }}>{stockData?.latestPrice > 0 ? stockData?.latestPrice.toLocaleString() : "N/A"}</p>
 
-                <table className="table">
-                    <tbody>
-                        <tr>
-                            <td>Dividend yield</td>
-                            <td>{dividendYield}</td>
-                        </tr>
-                        <tr>
-                            <td>P/E Ratio</td>
-                            <td>{pERatio}</td>
-                        </tr>
-                        <tr>
-                            <td>Volume Weighted Stock Price (last 15 min)</td>
-                            <td>{vWSP}</td>
-                        </tr>
-                        <tr>
-                            <td>GBCE All Share Index</td>
-                            <td>{gBCEAllShareIndex}</td>
-                        </tr>
-                    </tbody>
-                </table>
-
+                        </Tooltip>
+                    </Stack>
+                }
+                {!stockData &&
+                    <Tooltip title="Please search a stock symbol" arrow followCursor>
+                        <h3>N/A stock symbol</h3>
+                    </Tooltip>}
+            </div >
+            <div className="p-2">
             </div>
+            <div className="p-2 align-self-end">
+                <form onSubmit={handleSubmit}>
+                    <div className="d-flex flex-row ">
+                        <div className="p-2 w-25">
+                            <TextField
+                                required
+                                size="small"
+                                id="outlined-required"
+                                label="Price"
+                                value={priceForTrade || ''}
+                                onChange={e => setPriceForTrade(e.target.value)}
+                            />
+                        </div>
+                        <div className="p-2 w-25">
+                            <TextField
+                                required
+                                size="small"
+                                id="outlined-required"
+                                label="Quantity of shares"
+                                value={quantityOfShares || ''}
+                                onChange={e => setQuantityOfShares(e.target.value)}
+                            />
+                        </div>
+                        <div className="p-2 w-25">
+                            <FormControl variant="outlined" size="small" margin="none" hiddenLabel fullWidth>
+                                <InputLabel id="demo-simple-select-label">Trade indicator</InputLabel>
+                                <Select
+                                    labelId="demo-simple-select-label"
+                                    id="demo-simple-select"
+                                    label="Trade indicator"
+                                    placeholder="Trade indicator"
+                                    defaultValue={0}
+                                    onChange={(event) =>
+                                        setTradeIndicator(event.target.value)
+                                    }
+                                >
+                                    <MenuItem value={0}>Buy</MenuItem>
+                                    <MenuItem value={1}>Sell</MenuItem>
+                                </Select>
+                            </FormControl>
+                        </div>
+                        <div className="p-2 ">
+                            <Tooltip title={stockContext === undefined ? "Please select a stock symbol" : "Trade"} followCursor >
+                                <Button type="submit" variant="contained" size="large" disabled={stockContext === undefined} >Trade</Button>
+                            </Tooltip>
+                        </div>
+                    </div>
 
-            <div className="col">
-                <table className="table">
-                    <tbody>
-                        <tr>
-                            <td>Stock type </td>
-                            <td>{selectedSymbol?.type === 0 ? "Common" : "Preferred"}</td>
-                        </tr>
-                        <tr>
-                            <td>Last Dividend</td>
-                            <td>{selectedSymbol?.lastDividend}</td>
-                        </tr>
-                        <tr>
-                            <td>Fixed Dividend</td>
-                            <td>{selectedSymbol?.fixedDividend}</td>
-                        </tr>
-                        <tr>
-                            <td>Par value</td>
-                            <td>{selectedSymbol?.parValue}</td>
-                        </tr>
-                    </tbody>
-                </table>
-
+                </form>
             </div>
         </div>
+        <Divider />
+        <br />
+        <div className="row">
 
 
-        <form onSubmit={handleSubmit}>
-            <div className="container">
-                <div className="row">
-                    <div className="form-group mb-2 col-2">
-                        <input type="text" className="form-control" value={priceForTrade || ''} onChange={e => setPriceForTrade(e.target.value)} placeholder="Price" />
-                    </div>
-                    <div className="form-group mb-2 col-2">
-                        <input type="text" className="form-control" value={quantityOfShares || ''} onChange={(e) => setQuantityOfShares(e.target.value)} placeholder="Quantity of shares" />
-                    </div>
-                    <div className="form-group col-2 ">
-                        <FormControl variant="standard" size="small" fullWidth>
-                            <InputLabel id="demo-simple-select-label">Trade indicator</InputLabel>
-                            <Select
-                                labelId="demo-simple-select-label"
-                                id="demo-simple-select"
-                                label="Trade indicator"
-                                placeholder="Trade indicator"
-                                defaultValue={0}
-                                onChange={(event) =>
-                                    setTradeIndicator(event.target.value)
-                                }
-                            >
-                                <MenuItem value={0}>Buy</MenuItem>
-                                <MenuItem value={1}>Sell</MenuItem>
-                            </Select>
-                        </FormControl>
-                    </div>
-                    <div className="form-group mb-2 col-2 ">
-                        <Button type="submit" variant="contained" >Trade</Button>
-                    </div>
-                </div>
+            <div className="col-7">
+
+                <ReactApexChart options={options} series={[{
+                    name: "Price",
+                    data: data
+                }]} type="area" height={350} />
+
+            </div>
+            <div className="col-5">
+                <TableContainer component={Paper}>
+                    <Table sx={{}} size="small" aria-label="a dense table">
+                        <TableBody>
+                            {stockData &&
+                                <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                                    <TableCell align="left">
+                                        <Stack direction="row" spacing={2}>
+                                            <Chip label="Stock" clickable />
+                                            <Chip label={stockData?.stockTypeDesc ?? "N/A"} clickable />
+                                        </Stack>
+                                    </TableCell>
+                                    <TableCell >
+                                    </TableCell>
+                                </TableRow>}
+                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}                            >
+                                <TableCell component="th" scope="row">Last Dividend</TableCell>
+                                <TableCell align="right">{stockData?.lastDividend ?? "N/A"}</TableCell>
+                            </TableRow>
+                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}                            >
+                                <TableCell component="th" scope="row">Fixed Dividend</TableCell>
+                                <TableCell align="right">{stockData?.fixedDividend ?? "N/A"}</TableCell>
+                            </TableRow>
+                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}                            >
+                                <TableCell component="th" scope="row">Par value</TableCell>
+                                <TableCell align="right">{stockData?.parValue ?? "N/A"}</TableCell>
+                            </TableRow>
+                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}                            >
+                                <TableCell component="th" scope="row">Dividend yield</TableCell>
+                                <TableCell align="right">{stockData?.dividendYield ?? "N/A"}</TableCell>
+                            </TableRow>
+                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}                            >
+                                <TableCell component="th" scope="row">P/E Ratio</TableCell>
+                                <TableCell align="right">{stockData?.peRatio ?? "N/A"}</TableCell>
+                            </TableRow>
+                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}                            >
+                                <TableCell component="th" scope="row">Volume Weighted Stock Price (last 15 min)</TableCell>
+                                <TableCell align="right">{stockData?.volumeWeightedStockPrice ?? "N/A"}</TableCell>
+                            </TableRow>
+                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}                            >
+                                <TableCell component="th" scope="row">GBCE All Share Index</TableCell>
+                                <TableCell align="right">{stockData?.gbceAllShareIndex ?? "N/A"}</TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                </TableContainer>
 
             </div>
 
-        </form>
-        {/* <p>Dividend yield: </p>
-        <p>P/E Ratio: </p>
-        <p>Volume Weighted Stock Price (last 15 min): </p>
-        <p>GBCE All Share Index: </p> */}
+        </div>
+        {
+            trades && <div style={{ height: 400 }}>
+                <DataGrid
+                    rows={trades}
+                    columns={columns}
+                    pageSize={5}
+                    rowsPerPageOptions={[5]}
+                />
+            </div>
+        }
 
 
     </Fragment >);
