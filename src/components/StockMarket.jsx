@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Fragment } from "react";
-import axios from 'axios';
 import { Button, FormControl, InputLabel, Select, MenuItem, TextField, Tooltip, TableContainer, Paper, Table, TableRow, TableBody, TableCell, Chip, Stack, Divider } from "@mui/material";
 import { DataGrid } from '@mui/x-data-grid';
 import "./tableStyle.css";
 import Api from './StockMarketApi';
 import { StockContext } from "./StockContext";
 import ReactApexChart from "react-apexcharts";
-import Moment from 'moment';
+
 export const StockMarket = (props) => {
     const stockContext = React.useContext(StockContext);
     const [stockData, setStockData] = useState();
@@ -15,12 +14,13 @@ export const StockMarket = (props) => {
     const [quantityOfShares, setQuantityOfShares] = useState();
     const [tradeIndicator, setTradeIndicator] = useState();
     const [trades, setTrades] = useState();
-    const [data, setData] = useState();
+    const [graphData, setGraphData] = useState();
 
-    const callBackGetTrades = useCallback(() => {
+
+    useEffect(() => {
         Api.getTrades().then(r => {
             if (!r.data) return;
-            console.log(r.data);
+
             setTrades(r.data);
         }).catch(
             function (error) {
@@ -31,15 +31,10 @@ export const StockMarket = (props) => {
         );
     }, [setTrades]);
 
-    useEffect(() => {
-        callBackGetTrades();
-    }, [callBackGetTrades]);
-
 
     const handleOnChangedSymbol = useCallback((symbol) => {
         Api.getStockCalculations(symbol).then(r => {
             if (!r.data) return;
-            console.log(r.data);
 
             setStockData(r.data);
         }).catch(
@@ -54,49 +49,53 @@ export const StockMarket = (props) => {
     // useInterval(getStockMarketData, 5000);
 
     useEffect(() => {
-        if (!stockContext) return;
+        if (!stockContext) {
+            setStockData(undefined);
+            setTrades(undefined);
+            setGraphData(undefined);
+            return;
+        }
+
         handleOnChangedSymbol(stockContext);
-    }, [stockContext, handleOnChangedSymbol]);
+    }, [stockContext, setStockData, setGraphData, handleOnChangedSymbol]);
 
-    const handleSubmit = useCallback(
-        (event) => {
-            event?.preventDefault();
+    const handleSubmit = useCallback((event) => {
+        event?.preventDefault();
 
-            var trade = {
-                stockSymbol: stockContext,
-                quantityOfShares: quantityOfShares,
-                price: priceForTrade,
-                tradeIndicator: tradeIndicator
-            };
+        var trade = {
+            stockSymbol: stockContext,
+            quantityOfShares: Math.floor(quantityOfShares),
+            price: parseFloat(priceForTrade).toFixed(2),
+            tradeIndicator: tradeIndicator
+        };
 
-            axios.post('api/stockmarket/trade', trade).then(r => {
-                if (!r.data) return;
+        Api.trade(trade).then(r => {
+            if (!r.data) return;
 
-                setPriceForTrade(undefined);
-                setQuantityOfShares(undefined);
-                setTradeIndicator(0);
+            setPriceForTrade(undefined);
+            setQuantityOfShares(undefined);
+            setTradeIndicator(0);
 
-                setTrades(prevState => [...prevState, r.data]);
+            setTrades(prevState => [...prevState, r.data]);
 
-                //I am trying to avoid polling in here
-                handleOnChangedSymbol(stockContext);
-            }).catch(
-                function (error) {
-                    console.log('Endpoint error: api/stockmarket/trade');
-                    console.log(error);
-                    return Promise.reject(error)
-                }
-            )
-        },
-        [handleOnChangedSymbol, stockContext, quantityOfShares, priceForTrade, tradeIndicator, setPriceForTrade, setQuantityOfShares, setTradeIndicator],
+            //I am trying to avoid polling in here
+            handleOnChangedSymbol(stockContext);
+        }).catch(
+            function (error) {
+                console.log('Endpoint error: api/stockmarket/trade');
+                console.log(error);
+                return Promise.reject(error)
+            }
+        )
+    },
+        [setTrades, handleOnChangedSymbol, stockContext, quantityOfShares, priceForTrade, tradeIndicator, setPriceForTrade, setQuantityOfShares, setTradeIndicator],
     )
 
     useEffect(() => {
         if (!trades || !stockContext) return;
         var myData = trades.filter(x => x.stockSymbol === stockContext).map(x => [x.timeStamp, x.price]);
-        console.log("mydata")
-        console.log(myData);
-        setData(myData);
+
+        setGraphData(myData);
     }, [trades, stockContext]);
 
     const columns = [
@@ -186,16 +185,16 @@ export const StockMarket = (props) => {
                         <Tooltip title="Stock symbol" arrow followCursor>
                             <p style={{ fontSize: "1rem", fontWeight: "lighter" }}>{stockData?.stockSymbol} - Global Beverage Corporation Exchange</p>
                         </Tooltip>
-                        <Tooltip title="Latest price" arrow followCursor>
+                        <Tooltip title="Last price" arrow followCursor>
 
-                            <p style={{ fontSize: "36px", fontWeight: "bolder" }}>{stockData?.latestPrice > 0 ? stockData?.latestPrice.toLocaleString() : "N/A"}</p>
+                            <p style={{ fontSize: "36px", fontWeight: "bolder" }}>{stockData?.latstPrice > 0 ? stockData?.latstPrice.toLocaleString() : "N/A"}</p>
 
                         </Tooltip>
                     </Stack>
                 }
                 {!stockData &&
                     <Tooltip title="Please search a stock symbol" arrow followCursor>
-                        <h3>N/A stock symbol</h3>
+                        <h3>Stock symbol N/A</h3>
                     </Tooltip>}
             </div >
             <div className="p-2">
@@ -206,21 +205,41 @@ export const StockMarket = (props) => {
                         <div className="p-2 w-25">
                             <TextField
                                 required
+                                type="number"
+                                inputProps={{
+                                    maxLength: 13,
+                                    step: "10"
+                                }}
                                 size="small"
                                 id="outlined-required"
                                 label="Price"
                                 value={priceForTrade || ''}
-                                onChange={e => setPriceForTrade(e.target.value)}
+                                onChange={e => {
+                                    if (e.target.value.length > 13) return;
+
+                                    setPriceForTrade(e.target.value);
+                                }}
                             />
                         </div>
                         <div className="p-2 w-25">
                             <TextField
                                 required
+                                type="number"
+
+                                inputProps={{
+                                    maxLength: 13,
+                                    step: "10",
+                                    pattern: '[0-9]*'
+                                }}
                                 size="small"
                                 id="outlined-required"
-                                label="Quantity of shares"
+                                label="Quantity"
                                 value={quantityOfShares || ''}
-                                onChange={e => setQuantityOfShares(e.target.value)}
+                                onChange={e => {
+                                    if (e.target.value.length > 9) return;
+
+                                    setQuantityOfShares(e.target.value);
+                                }}
                             />
                         </div>
                         <div className="p-2 w-25">
@@ -243,7 +262,9 @@ export const StockMarket = (props) => {
                         </div>
                         <div className="p-2 ">
                             <Tooltip title={stockContext === undefined ? "Please select a stock symbol" : "Trade"} followCursor >
-                                <Button type="submit" variant="contained" size="large" disabled={stockContext === undefined} >Trade</Button>
+                                <span>
+                                    <Button type="submit" variant="outlined" size="large" disabled={stockContext === undefined} >Trade</Button>
+                                </span>
                             </Tooltip>
                         </div>
                     </div>
@@ -260,8 +281,8 @@ export const StockMarket = (props) => {
 
                 <ReactApexChart options={options} series={[{
                     name: "Price",
-                    data: data
-                }]} type="area" height={350} />
+                    data: graphData ?? []
+                }]} type="area" height={300} />
 
             </div>
             <div className="col-5">
@@ -279,32 +300,40 @@ export const StockMarket = (props) => {
                                     <TableCell >
                                     </TableCell>
                                 </TableRow>}
-                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}                            >
+                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                                 <TableCell component="th" scope="row">Last Dividend</TableCell>
                                 <TableCell align="right">{stockData?.lastDividend ?? "N/A"}</TableCell>
                             </TableRow>
-                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}                            >
+                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                                 <TableCell component="th" scope="row">Fixed Dividend</TableCell>
                                 <TableCell align="right">{stockData?.fixedDividend ?? "N/A"}</TableCell>
                             </TableRow>
-                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}                            >
+                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                                 <TableCell component="th" scope="row">Par value</TableCell>
                                 <TableCell align="right">{stockData?.parValue ?? "N/A"}</TableCell>
                             </TableRow>
-                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}                            >
-                                <TableCell component="th" scope="row">Dividend yield</TableCell>
+                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                                <Tooltip title="last dividend / price" followCursor >
+                                    <TableCell component="th" scope="row">Dividend yield</TableCell>
+                                </Tooltip>
                                 <TableCell align="right">{stockData?.dividendYield ?? "N/A"}</TableCell>
                             </TableRow>
-                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}                            >
-                                <TableCell component="th" scope="row">P/E Ratio</TableCell>
+                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                                <Tooltip title="price / dividend" followCursor >
+                                    <TableCell component="th" scope="row">P/E Ratio</TableCell>
+                                </Tooltip>
                                 <TableCell align="right">{stockData?.peRatio ?? "N/A"}</TableCell>
                             </TableRow>
-                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}                            >
-                                <TableCell component="th" scope="row">Volume Weighted Stock Price (last 15 min)</TableCell>
+                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                                <Tooltip title="Σ Traded price × Quantity / Σ Quantity" followCursor >
+                                    <TableCell component="th" scope="row">Volume Weighted Stock Price (last 15 min)</TableCell>
+                                </Tooltip>
                                 <TableCell align="right">{stockData?.volumeWeightedStockPrice ?? "N/A"}</TableCell>
                             </TableRow>
-                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}                            >
-                                <TableCell component="th" scope="row">GBCE All Share Index</TableCell>
+                            <TableRow sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                                <Tooltip title="(p1p2p3...pn)^1/n" followCursor >
+                                    <TableCell component="th" scope="row">GBCE All Share Index</TableCell>
+                                </Tooltip>
                                 <TableCell align="right">{stockData?.gbceAllShareIndex ?? "N/A"}</TableCell>
                             </TableRow>
                         </TableBody>
@@ -314,16 +343,16 @@ export const StockMarket = (props) => {
             </div>
 
         </div>
-        {
-            trades && <div style={{ height: 400 }}>
-                <DataGrid
-                    rows={trades}
-                    columns={columns}
-                    pageSize={5}
-                    rowsPerPageOptions={[5]}
-                />
-            </div>
-        }
+
+        <div style={{ height: 400 }}>
+            <DataGrid
+                rows={trades ?? []}
+                columns={columns}
+                pageSize={10}
+                rowsPerPageOptions={[10]}
+            />
+        </div>
+
 
 
     </Fragment >);

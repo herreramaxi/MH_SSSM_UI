@@ -1,28 +1,21 @@
 import React, { useCallback, useContext, useEffect, useState } from 'react';
-import { Collapse, Container, Navbar } from 'reactstrap';
+import { Container, Navbar } from 'reactstrap';
 import './NavMenu.css';
-import { Autocomplete, TextField } from "@mui/material";
+import { Autocomplete, Button, IconButton, Snackbar, TextField, Tooltip } from "@mui/material";
 import Api from './StockMarketApi';
 import { StockDispatchContext } from './StockContext';
+import CloseIcon from '@mui/icons-material/Close';
 
 export const NavMenu = (props) => {
-  // const displayName = NavMenu.name;
-  const [collapsed] = useState(true);
   const [stockData, setStockData] = useState();
   const setStockContext = useContext(StockDispatchContext);
-
-  const [stockLabel, setStockLabel] = useState();
-  // const toggleNavbar = () => {
-  //   setCollapsed(state => !state);
-  // }
+  const [open, setOpen] = useState();
 
   useEffect(() => {
 
     Api.getSampleData().then(r => {
       if (!r.data) return;
 
-      setStockLabel("GBCE: " + r.data.symbolStock);
-      console.log(r.data)
       setStockData(r.data);
     }).catch(
       function (error) {
@@ -31,17 +24,43 @@ export const NavMenu = (props) => {
         return Promise.reject(error)
       }
     );
-  }, [setStockData, setStockLabel])
+  }, [setStockData])
 
   const handleOnChangedSymbol = useCallback((value) => {
     if (!value) return;
 
-    console.log(value.stockSymbol);
     setStockContext(value.stockSymbol);
   },
     [setStockContext],
   );
 
+  const handleOnclickClearData = useCallback(() => {
+    Api.clearOnMemoryData().then(r => {
+      setStockContext(undefined);
+      setOpen(true);
+    })
+  }, [setOpen, setStockContext]);
+
+  const handleClose = (event, reason) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+
+    setOpen(false);
+  };
+
+  const action = (
+    <React.Fragment>
+      <IconButton
+        size="small"
+        aria-label="close"
+        color="inherit"
+        onClick={handleClose}
+      >
+        <CloseIcon fontSize="small" />
+      </IconButton>
+    </React.Fragment>
+  );
 
   return (
     <header>
@@ -53,7 +72,6 @@ export const NavMenu = (props) => {
             sx={{ width: 300 }}
             id="free-solo-2-demo"
             disableClearable
-            value={stockLabel}
             getOptionLabel={(option) => "GBCE: " + option?.stockSymbol}
             options={stockData ?? []}
             onChange={(event, value) => handleOnChangedSymbol(value)}
@@ -69,19 +87,17 @@ export const NavMenu = (props) => {
               />
             )}
           />
-          {/* <NavbarBrand tag={Link} to="/">SSSM.Website</NavbarBrand> */}
-          {/* <NavbarToggler onClick={toggleNavbar} className="mr-2" /> */}
-          <Collapse className="d-sm-inline-flex flex-sm-row-reverse  d-flex justify-content-right" isOpen={!collapsed} navbar>
 
-            <ul className="navbar-nav flex-grow">
-              {/* <NavItem>
-                <NavLink tag={Link} className="text-dark" to="/stockmarket">StockMarket</NavLink>
-              </NavItem> */}
-              {/* <NavItem>
-                  <NavLink tag={Link} className="text-dark" to="/">Home</NavLink>
-                </NavItem>       */}
-            </ul>
-          </Collapse>
+          <Tooltip title="Utility for clearing on memory data: trades and last prices" followCursor >
+            <Button variant="outlined" size="large" onClick={handleOnclickClearData}>Clear on memory data</Button>
+          </Tooltip>
+          <Snackbar
+            open={open}
+            autoHideDuration={6000}
+            onClose={handleClose}
+            message="On memory data was successfully cleared"
+            action={action}
+          />
         </Container>
       </Navbar>
     </header>
