@@ -187,7 +187,7 @@ export const StockMarket = (props) => {
                         </Tooltip>
                         <Tooltip title="Last price" arrow followCursor>
 
-                            <p style={{ fontSize: "36px", fontWeight: "bolder" }}>{stockData?.latstPrice > 0 ? stockData?.latstPrice.toLocaleString() : "N/A"}</p>
+                            <p style={{ fontSize: "36px", fontWeight: "bolder" }}>{stockData?.lastPrice > 0 ? stockData?.lastPrice.toLocaleString() : "N/A"}</p>
 
                         </Tooltip>
                     </Stack>
