@@ -1,15 +1,16 @@
 import React, { useCallback, useContext, useEffect, useState } from 'react';
 import { Container, Navbar } from 'reactstrap';
 import './NavMenu.css';
-import { Autocomplete, Button, IconButton, Snackbar, TextField, Tooltip } from "@mui/material";
+import { Autocomplete, Button, TextField, Tooltip } from "@mui/material";
 import Api from './StockMarketApi';
 import { StockDispatchContext } from './StockContext';
-import CloseIcon from '@mui/icons-material/Close';
+import { MessageAlert } from './MessageAlert';
 
 export const NavMenu = (props) => {
   const [stockData, setStockData] = useState();
   const setStockContext = useContext(StockDispatchContext);
-  const [open, setOpen] = useState();
+  const [successMessage, setSuccessMessage] = useState();
+  const [errorMessage, setErrorMessage] = useState();
 
   useEffect(() => {
 
@@ -21,10 +22,12 @@ export const NavMenu = (props) => {
       function (error) {
         console.log('Endpoint error: api/stockmarket');
         console.log(error);
+
+        setErrorMessage("Error when trying to retrieve stock symbols");
         return Promise.reject(error)
       }
     );
-  }, [setStockData])
+  }, [setStockData, setErrorMessage])
 
   const handleOnChangedSymbol = useCallback((value) => {
     if (!value) return;
@@ -37,30 +40,28 @@ export const NavMenu = (props) => {
   const handleOnclickClearData = useCallback(() => {
     Api.clearOnMemoryData().then(r => {
       setStockContext(undefined);
-      setOpen(true);
-    })
-  }, [setOpen, setStockContext]);
+      setSuccessMessage("On memory data was successfully cleaned");
+    }).catch(error => {
+      console.log(error);
+      setErrorMessage("Error when trying to clean on memory data");
+    });
+  }, [setSuccessMessage, setErrorMessage, setStockContext]);
 
-  const handleClose = (event, reason) => {
+  const handleCloseSuccessAlert = (event, reason) => {
     if (reason === 'clickaway') {
       return;
     }
 
-    setOpen(false);
+    setSuccessMessage(undefined);
   };
 
-  const action = (
-    <React.Fragment>
-      <IconButton
-        size="small"
-        aria-label="close"
-        color="inherit"
-        onClick={handleClose}
-      >
-        <CloseIcon fontSize="small" />
-      </IconButton>
-    </React.Fragment>
-  );
+  const handleCloseErrorAlert = (event, reason) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+
+    setErrorMessage(undefined);
+  };
 
   return (
     <header>
@@ -88,16 +89,11 @@ export const NavMenu = (props) => {
             )}
           />
 
-          <Tooltip title="Utility for clearing on memory data: trades and last prices" followCursor >
+          <Tooltip title="Feature for cleaning on memory data: trades and last prices" followCursor >
             <Button variant="outlined" size="large" onClick={handleOnclickClearData}>Clear on memory data</Button>
           </Tooltip>
-          <Snackbar
-            open={open}
-            autoHideDuration={6000}
-            onClose={handleClose}
-            message="On memory data was successfully cleared"
-            action={action}
-          />
+          <MessageAlert successMessage={successMessage} handleCloseSuccessAlert={handleCloseSuccessAlert}
+            errorMessage={errorMessage} handleCloseErrorAlert={handleCloseErrorAlert} />
         </Container>
       </Navbar>
     </header>
