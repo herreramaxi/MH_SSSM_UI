@@ -2,7 +2,7 @@ import { Button, FormControl, InputLabel, MenuItem, Select, TextField, Tooltip }
 import React, { useCallback, useState } from "react";
 
 export const InputTrade = (props) => {
-    const { handleSubmit, stockContext } = props;
+    const { handleSubmit, stockSymbol } = props;
 
     const [priceForTrade, setPriceForTrade] = useState();
     const [quantityOfShares, setQuantityOfShares] = useState();
@@ -13,7 +13,7 @@ export const InputTrade = (props) => {
             event?.preventDefault();
 
             var trade = {
-                stockSymbol: stockContext,
+                stockSymbol: stockSymbol,
                 quantityOfShares: Math.floor(quantityOfShares),
                 price: parseFloat(priceForTrade).toFixed(2),
                 tradeIndicator: tradeIndicator
@@ -25,7 +25,7 @@ export const InputTrade = (props) => {
                 setTradeIndicator(0);
             });
         },
-        [handleSubmit, stockContext, quantityOfShares, priceForTrade, tradeIndicator, setPriceForTrade, setQuantityOfShares, setTradeIndicator],
+        [stockSymbol, quantityOfShares, priceForTrade, tradeIndicator, handleSubmit],
     );
 
     return (<>
@@ -36,7 +36,7 @@ export const InputTrade = (props) => {
                         required
                         type="number"
                         inputProps={{
-                            maxLength: 13,
+                            maxLength: 10,
                             step: "10"
                         }}
                         size="small"
@@ -44,7 +44,7 @@ export const InputTrade = (props) => {
                         label="Price"
                         value={priceForTrade || ''}
                         onChange={e => {
-                            if (e.target.value.length > 13) return;
+                            if (!e?.target?.value || e.target.value.length > 10 || parseInt(e.target.value) > 1000000) return;
 
                             setPriceForTrade(e.target.value);
                         }}
@@ -56,7 +56,7 @@ export const InputTrade = (props) => {
                         type="number"
 
                         inputProps={{
-                            maxLength: 13,
+                            maxLength: 9,
                             step: "10",
                             pattern: '[0-9]*'
                         }}
@@ -65,7 +65,7 @@ export const InputTrade = (props) => {
                         label="Quantity"
                         value={quantityOfShares || ''}
                         onChange={e => {
-                            if (e.target.value.length > 9) return;
+                            if (!e?.target?.value || e.target.value.length > 9 || parseInt(e.target.value) > 1000000) return;
 
                             setQuantityOfShares(e.target.value);
                         }}
@@ -90,9 +90,9 @@ export const InputTrade = (props) => {
                     </FormControl>
                 </div>
                 <div className="p-2 ">
-                    <Tooltip title={stockContext === undefined ? "Please select a stock symbol" : "Trade"} followCursor >
+                    <Tooltip title={stockSymbol === undefined ? "Please select a stock symbol" : "Trade"} followCursor >
                         <span>
-                            <Button type="submit" variant="outlined" size="large" disabled={stockContext === undefined} >Trade</Button>
+                            <Button type="submit" variant="outlined" size="large" disabled={stockSymbol === undefined} >Trade</Button>
                         </span>
                     </Tooltip>
                 </div>

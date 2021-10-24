@@ -4,10 +4,11 @@ const StockDispatchContext = createContext(undefined);
 
 function StockProvider({ children }) {
     const [stockSymbol, setStockSymbol] = useState();
+    const [resetTrades, setResetTrades] = useState();
 
     return (
-        <StockContext.Provider value={stockSymbol}>
-            <StockDispatchContext.Provider value={setStockSymbol}>
+        <StockContext.Provider value={{ stockSymbol, resetTrades }}>
+            <StockDispatchContext.Provider value={{ setStockSymbol, setResetTrades }}>
                 {children}
             </StockDispatchContext.Provider>
         </StockContext.Provider>

@@ -3,7 +3,7 @@ import { Fragment } from "react";
 import { DataGrid } from '@mui/x-data-grid';
 import "./tableStyle.css";
 import Api from './StockMarketApi';
-import { StockContext } from "./StockContext";
+import { StockContext, StockDispatchContext } from "./StockContext";
 import { MessageAlert } from "./MessageAlert";
 import { StockGraph } from "./StockGraph";
 import { TableStockIndicators } from "./TableStockIndicators";
@@ -12,9 +12,9 @@ import { InputTrade } from "./InputTrade";
 import { Divider } from "@mui/material";
 
 export const StockMarket = (props) => {
-    const stockContext = React.useContext(StockContext);
+    const { stockSymbol, resetTrades } = React.useContext(StockContext);
+    const { setResetTrades } = React.useContext(StockDispatchContext);
     const [stockData, setStockData] = useState();
-
     const [trades, setTrades] = useState();
     const [graphData, setGraphData] = useState();
     const [successMessage, setSuccessMessage] = useState();
@@ -34,7 +34,28 @@ export const StockMarket = (props) => {
                 return Promise.reject(error)
             }
         );
-    }, [setTrades]);
+    }, []);
+
+
+    useEffect(() => {
+
+        if (!resetTrades) return;
+
+        Api.getTrades().then(r => {
+            if (!r.data) return;
+
+            setResetTrades(false);
+            setTrades(r.data);
+        }).catch(
+            function (error) {
+                console.log('Endpoint error: api/getTrades');
+                console.log(error);
+
+                setErrorMessage("Error when trying to retrieve trades");
+                return Promise.reject(error)
+            }
+        );
+    }, [resetTrades, setResetTrades]);
 
 
     const handleOnChangedSymbol = useCallback((symbol) => {
@@ -52,18 +73,18 @@ export const StockMarket = (props) => {
             }
         );
 
-    }, [setStockData]);
+    }, []);
 
     useEffect(() => {
-        if (!stockContext) {
+        if (!stockSymbol) {
             setStockData(undefined);
-            setTrades(undefined);
+            // setTrades(undefined);
             setGraphData(undefined);
             return;
         }
 
-        handleOnChangedSymbol(stockContext);
-    }, [stockContext, setStockData, setGraphData, handleOnChangedSymbol]);
+        handleOnChangedSymbol(stockSymbol);
+    }, [stockSymbol, handleOnChangedSymbol]);
 
     const handleSubmit = useCallback((trade, onSuccessCallback) => {
         if (!trade) return;
@@ -71,11 +92,20 @@ export const StockMarket = (props) => {
         Api.trade(trade).then(r => {
             if (!r.data) return;
 
-            setTrades(prevState => [...prevState, r.data]);
+            setTrades((prevState) => {
+
+                if (!prevState) {
+                    return [r.data];
+                }
+
+                return [...prevState, r.data];
+
+            });
+
             setSuccessMessage("Trade successful");
 
             //I am trying to avoid polling in here
-            handleOnChangedSymbol(stockContext);
+            handleOnChangedSymbol(stockSymbol);
 
             onSuccessCallback();
             return true;
@@ -90,15 +120,15 @@ export const StockMarket = (props) => {
             }
         )
     },
-        [setTrades, handleOnChangedSymbol, setSuccessMessage, stockContext]
+        [stockSymbol, handleOnChangedSymbol]
     )
 
     useEffect(() => {
-        if (!trades || !stockContext) return;
-        var myData = trades.filter(x => x.stockSymbol === stockContext).map(x => [x.timeStamp, x.price]);
+        if (!trades || !stockSymbol) return;
+        var myData = trades.filter(x => x.stockSymbol === stockSymbol).map(x => [x.timeStamp, x.price]);
 
         setGraphData(myData);
-    }, [trades, stockContext]);
+    }, [trades, stockSymbol]);
 
     const handleCloseSuccessAlert = (event, reason) => {
         if (reason === 'clickaway') {
@@ -117,10 +147,10 @@ export const StockMarket = (props) => {
     };
 
     const columns = [
-        { field: 'stockSymbol', headerName: 'Symbol', width: 130 },
-        { field: 'price', headerName: 'Price', width: 130 },
-        { field: 'quantityOfShares', headerName: 'Quantity', width: 130 },
-        { field: 'tradeIndicatorDesc', headerName: 'Trade indicator', width: 130 },
+        { field: 'stockSymbol', headerName: 'Symbol', width: 150 },
+        { field: 'price', headerName: 'Price', width: 150 },
+        { field: 'quantityOfShares', headerName: 'Quantity', width: 150 },
+        { field: 'tradeIndicatorDesc', headerName: 'Trade indicator', width: 150 },
         { field: 'timeStamp', type: 'dateTime', headerName: 'Timestamp', minWidth: 200 },
     ];
 
@@ -132,7 +162,7 @@ export const StockMarket = (props) => {
             <div className="p-2">
             </div>
             <div className="p-2 align-self-end">
-                <InputTrade stockContext={stockContext} handleSubmit={handleSubmit} />
+                <InputTrade stockSymbol={stockSymbol} handleSubmit={handleSubmit} />
             </div>
         </div>
         <Divider />
@@ -145,7 +175,8 @@ export const StockMarket = (props) => {
                 <TableStockIndicators stockData={stockData} />
             </div>
         </div>
-        <div style={{ height: 400 }}>
+        <Divider textAlign="left">Trades</Divider>
+        <div className="mt-3" style={{ height: 400 }}>
             <DataGrid
                 density="compact"
                 rows={trades ?? []}
@@ -154,7 +185,6 @@ export const StockMarket = (props) => {
                 rowsPerPageOptions={[10]}
             />
         </div>
-
         <MessageAlert successMessage={successMessage} handleCloseSuccessAlert={handleCloseSuccessAlert}
             errorMessage={errorMessage} handleCloseErrorAlert={handleCloseErrorAlert} />
     </Fragment >);
